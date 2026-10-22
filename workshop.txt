@@ -25,7 +25,6 @@ description=[list]
 description=[*]Zombie Dismemberment: headless corpses and zombies with no arms and a lost leg stay down, and Finish off takes the head off.
 description=[*]Day and night mods can decide when the dead rise: Crepuscular makes the night's kills rise in the dark.
 description=[*]Modders can keep their monsters down, keep a corpse down or react to a rise through a small API.
-description=[*]Undying Zombies: use one of the two, not both.
 description=[/list]
 description=
 description=[h2]GOOD TO KNOW[/h2]
