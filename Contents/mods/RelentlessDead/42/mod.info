@@ -1,0 +1,5 @@
+name=Relentless Dead
+id=RelentlessDead
+description=Killed zombies can get back up where they fell, a few hours later. Choose how many rise, when and how often, and keep a corpse down by burning it or finishing it off. Bandits and headless corpses never rise. Single player and multiplayer, with support for Zombie Dismemberment and an API for mods that decide when the dead rise, such as day and night mods.
+poster=poster.png
+versionMin=42.20.2

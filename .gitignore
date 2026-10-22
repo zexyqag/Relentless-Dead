@@ -1,0 +1,10 @@
+/*
+!/.gitignore
+!/README.md
+!/workshop.txt
+!/preview.png
+!/publish.py
+!/Contents/
+!/.github/
+/.github/*
+!/.github/workflows/

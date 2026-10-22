@@ -1,0 +1,129 @@
+VERSION = 1,
+
+option RelentlessDead.RiseChance
+{
+    type = integer,
+    min = 0,
+    max = 100,
+    default = 50,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseChance,
+}
+
+option RelentlessDead.RiseDelayMin
+{
+    type = double,
+    min = 0.0,
+    max = 48.0,
+    default = 1.0,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseDelayMin,
+}
+
+option RelentlessDead.RiseDelayMax
+{
+    type = double,
+    min = 0.0,
+    max = 48.0,
+    default = 2.0,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseDelayMax,
+}
+
+option RelentlessDead.MaxRises
+{
+    type = integer,
+    min = 0,
+    max = 20,
+    default = 1,
+    page = RelentlessDead,
+    translation = RelentlessDead_MaxRises,
+}
+
+option RelentlessDead.RiseMaxAgeHours
+{
+    type = integer,
+    min = 0,
+    max = 8760,
+    default = 168,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseMaxAgeHours,
+}
+
+option RelentlessDead.FireStaysDown
+{
+    type = boolean,
+    default = true,
+    page = RelentlessDead,
+    translation = RelentlessDead_FireStaysDown,
+}
+
+option RelentlessDead.FinishOff
+{
+    type = boolean,
+    default = true,
+    page = RelentlessDead,
+    translation = RelentlessDead_FinishOff,
+}
+
+option RelentlessDead.FinishOffSeconds
+{
+    type = integer,
+    min = 1,
+    max = 30,
+    default = 3,
+    page = RelentlessDead,
+    translation = RelentlessDead_FinishOffSeconds,
+}
+
+option RelentlessDead.HeadHitsStayDown
+{
+    type = boolean,
+    default = false,
+    page = RelentlessDead,
+    translation = RelentlessDead_HeadHitsStayDown,
+}
+
+option RelentlessDead.RiseInSafehouses
+{
+    type = boolean,
+    default = false,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseInSafehouses,
+}
+
+option RelentlessDead.RisePlayers
+{
+    type = boolean,
+    default = false,
+    page = RelentlessDead,
+    translation = RelentlessDead_RisePlayers,
+}
+
+option RelentlessDead.RisesPerScan
+{
+    type = integer,
+    min = 1,
+    max = 100,
+    default = 10,
+    page = RelentlessDead,
+    translation = RelentlessDead_RisesPerScan,
+}
+
+option RelentlessDead.RiserLimit
+{
+    type = integer,
+    min = 100,
+    max = 50000,
+    default = 5000,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiserLimit,
+}
+
+option RelentlessDead.Verbose
+{
+    type = boolean,
+    default = false,
+    page = RelentlessDead,
+    translation = RelentlessDead_Verbose,
+}

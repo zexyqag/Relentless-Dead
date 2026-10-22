@@ -1,0 +1,6 @@
+{
+    "IGUI_RelentlessDead_Status": "Relentless Dead: %1 corpses waiting to rise; rise %2, wake %3. Details are in the log.",
+    "IGUI_RelentlessDead_On": "on",
+    "IGUI_RelentlessDead_Off": "off",
+    "IGUI_RelentlessDead_Denied": "Relentless Dead: you need the sandbox options permission."
+}
