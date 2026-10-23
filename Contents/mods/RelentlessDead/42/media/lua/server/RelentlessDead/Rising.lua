@@ -386,14 +386,10 @@ local function rememberDeath(z, id, x, y, level)
     deaths[z:getOnlineID()] = { at = now, x = x, y = y, z = level, id = id, zombie = z, by = z:getAttackedBy() }
 end
 
--- A weapon that starts fires, as a molotov does: its blast can kill before the zombie burns.
-local function incendiary(weapon)
-    return weapon ~= nil and (weapon:getFireRange() > 0 or weapon:getFireStartingChance() > 0)
-end
-
+-- A hit from a weapon that starts fires can kill before the zombie burns.
 Events.OnHitZombie.Add(function(z, wielder, part, weapon)
     strike = { zombie = z, by = wielder, at = getTimestampMs(), head = Body.headStrike(z, wielder, part, weapon),
-        fire = incendiary(weapon) }
+        fire = weapon ~= nil and Body.incendiary(weapon) }
 end)
 
 -- The hit that killed z, dying now, or nil. A death without a hit, as by fire, has no attacker.

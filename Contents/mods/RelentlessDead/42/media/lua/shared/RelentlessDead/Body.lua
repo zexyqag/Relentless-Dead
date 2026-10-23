@@ -45,21 +45,25 @@ function Body.crippled(o)
     return ARMS[data.ZD_L] == true and ARMS[data.ZD_R] == true and (data.ZD_LegL == "WholeLeg" or data.ZD_LegR == "WholeLeg")
 end
 
+-- A weapon that starts fires, as a molotov: its hits burn, whether its blast or a mod's burn damage.
+function Body.incendiary(weapon)
+    return weapon:getFireRange() > 0 or weapon:getFireStartingChance() > 0
+end
+
 -- Where a hit, as OnHitZombie gives it, struck the head, or nil: "shot", by a firearm's hit reaction,
 -- which the shooter's game sets before the hit and a server takes from the hit it receives; "jaw", the
 -- knife stab through the jaw, the attack's own reaction; "head", a melee hit whose spot the game
 -- picked on the head, each game picking its own.
 function Body.headStrike(z, wielder, part, weapon)
-    if weapon == nil then
+    -- A blast or a burn gets a spot rolled as a melee hit does, and the attacker's reaction from an
+    -- earlier attack: neither is a blow to its head.
+    if weapon == nil or weapon:isExplosive() or weapon:getExplosionRange() > 0 or Body.incendiary(weapon) then
         return nil
     end
     if weapon:isRanged() then
         if SHOTS[z:getHitReaction()] then
             return "shot"
         end
-        return nil
-    end
-    if weapon:isExplosive() then
         return nil
     end
     if wielder:getVariableString("ZombieHitReaction") == "KnifeDeath" then

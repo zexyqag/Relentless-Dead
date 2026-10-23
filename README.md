@@ -48,7 +48,7 @@ When a zombie dies, the share in effect decides: **Rise chance** (`RiseChance`, 
 | Both its arms are off and a leg is lost ([Zombie Dismemberment](#compatibility)) | Always: it could only lie there |
 | Another mod keeps it down | That mod, through `addVeto` |
 | It was a player | `RisePlayers` (off by default) |
-| It died of fire: burning, on a square with a fire, or by the blast of a weapon that starts fires | `FireStaysDown` (on by default) |
+| It died of fire: burning, on a square with a fire, or by a hit from a weapon that starts fires | `FireStaysDown` (on by default) |
 | A blow to its head killed it: a shot or a melee hit the game puts in the head, the knife stab through the jaw, or a hit to its head on the floor | `HeadKillsStayDown` (off by default), see [Head kills](#head-kills) |
 | It has already risen as often as allowed | `MaxRises` (no limit by default) |
 | The share is 0, or its roll misses | `RiseChance`, or the driving mod |
@@ -67,7 +67,7 @@ When a zombie dies, the share in effect decides: **Rise chance** (`RiseChance`, 
 
 | Way | Detail |
 |---|---|
-| **Burn it** | Burning a corpse with petrol and a lighter keeps it down as soon as the burn is done, even where the server lets no fire start (no fire allowed, water, a safehouse without fire) and in the seconds before the fire takes it. With `FireStaysDown` on, a zombie that dies of fire stays down too: one that dies burning, on a square with a fire, or by the blast of a weapon that starts fires (a molotov's), which can kill before it burns. |
+| **Burn it** | Burning a corpse with petrol and a lighter keeps it down as soon as the burn is done, even where the server lets no fire start (no fire allowed, water, a safehouse without fire) and in the seconds before the fire takes it. With `FireStaysDown` on, a zombie that dies of fire stays down too: one that dies burning, on a square with a fire, or by a hit from a weapon that starts fires (an incendiary bomb's blast, which can kill before the fire takes, or the burn damage some mods deal as hits with a molotov). |
 | **Finish off** | Right-click zombie corpses: **Finish off** for the nearest one not yet finished off, as the game's own corpse options pick one, or **Finish off N corpses** when several lie on its tile. You walk up to it and work for `FinishOffSeconds` (3 by default), and it never rises again. Each corpse can be finished off once, by anyone: every player's game then leaves it out of the menu. It is offered on every corpse not yet finished off, so the menu doesn't show which ones would rise; only Project A-Life's NPC corpses, which never rise here, are left out. The server takes it only from a player within 3 tiles. With [Zombie Dismemberment](#compatibility) and its decapitation on, Finish off takes the head off. |
 | **Head kills** | With `HeadKillsStayDown` on, a zombie killed by a blow to its head stays down: see [Head kills](#head-kills). It is a separate switch from Finish off. |
 | Bury it, or carry it away | A buried corpse is gone. One carried off as an item is no longer found, and is dropped after three checks. |
@@ -90,8 +90,9 @@ With `HeadKillsStayDown` on (off by default), a zombie stays down when the blow 
 | A melee hit to the head of a zombie on the floor | The zombie dies within 5 seconds of the hit. | The attacker's game, the only one that knows where such a hit lands: it reports the hit, and the server takes the report only from a player within 3 tiles |
 
 - Only the blow that kills counts: a zombie shot in the head that dies of a later hit elsewhere, or of fire, can rise.
-- In multiplayer the attacker's game also reports a shot in the head or the knife stab through the jaw that killed its copy of the zombie, for mods that settle where a bullet lands on the shooter's game alone. The server takes the report only from the player who killed that zombie there, within 5 seconds of its death. Without such a mod, the server already knows these blows from the hit itself.
-- Explosions never count, whatever part of the body the game gave them.
+- In multiplayer the attacker's game also reports a shot in the head or the knife stab through the jaw that killed its copy of the zombie, for mods that settle where a bullet lands on the shooter's game alone, such as [Viewpoint True Ballistics](https://steamcommunity.com/sharedfiles/filedetails/?id=3812864848). The server takes the report only from the player who killed that zombie there, within 5 seconds of its death. Without such a mod, the server already knows these blows from the hit itself.
+- Bombs and fire never count, whatever part of the body the game gave their hits, also when a mod deals burn damage as hits with a molotov.
+- A shot at a zombie eating a body gives it the eating reaction, not a shot in the head: a head shot that kills it there doesn't count.
 - In multiplayer each game picks the spot of a melee hit for itself, for the wound it draws, and the server's pick decides: the wound a player sees may not match it.
 - A head kill's corpse lies as any other: it is still offered Finish off, so the menu tells nothing.
 - A head that another mod only shows flying off, keeping nothing of it on the zombie, doesn't count by itself; the blow can still be a head kill.
@@ -116,7 +117,7 @@ Each option is `RelentlessDead.<Option>` in the sandbox settings, on the **Relen
 | `RiseMaxAgeHours` | Oldest corpse that rises | `168` | 0 to 8760 | A marked corpse older than this many in-game hours stays down; 0 for no limit. |
 | `RiseWarning` | Warning before rising | `true` | true or false | A corpse groans before it gets up, for every player near it. Off for hardcore games: corpses get up without a sound. |
 | `RiseWarningMinutes` | Warning time | `2` | 1 to 10 | In-game minutes from the groan until the corpse gets up; 2 is 5 seconds at the default day length of one hour. |
-| `FireStaysDown` | Burned zombies stay down | `true` | true or false | A zombie that dies of fire (burning, on a square with a fire, or by a fire bomb's blast) is never marked to rise. A burned corpse stays down either way. |
+| `FireStaysDown` | Burned zombies stay down | `true` | true or false | A zombie that dies of fire (burning, on a square with a fire, or by a hit from a weapon that starts fires) is never marked to rise. A burned corpse stays down either way. |
 | `FinishOff` | Finish off | `true` | true or false | Offer Finish off on zombie corpses, once per corpse, which keeps them down. |
 | `FinishOffSeconds` | Finish off time | `3` | 1 to 30 | How long Finish off takes, in seconds at normal game speed. |
 | `HeadKillsStayDown` | Head kills keep zombies down | `false` | true or false | A zombie killed by a blow to its head stays down: see [Head kills](#head-kills). |
@@ -211,6 +212,8 @@ From the mods' code where it is public. None of these was tested together with R
 
 - **Zombie Dismemberment:** a zombie whose head it took off never rises, nor does one with both arms off and a leg lost, which it keeps on the floor. With its decapitation on (its own `Enabled` and `EnableDecapitation` options), Finish off takes the head off as it does, which removes hats, glasses and masks from the corpse, on the server and on every player's game that has the corpse loaded. Its author has not yet tested its multiplayer in a live session.
 - **Mods that raise corpses through the game's own revival timer:** every way this mod keeps a corpse down (Finish off, burning, head kills, the safehouse and other checks, `keepDown`) also cancels a revival timer the game holds for a zombie's corpse, whoever set it. A corpse this mod never marked can still rise through such a mod, by its rules.
+- **Viewpoint True Ballistics:** from its docs, its rounds hit through the game's own hit on the shooter's game, with the body part they struck, so a shot in the head that kills is a head kill. In multiplayer the shooter's game reports it (see [Head kills](#head-kills)). With its Hit locations option off, the game picks the part, as for any shot.
+- **[Viewpoint Advanced Throwables](https://steamcommunity.com/sharedfiles/filedetails/?id=3813194971):** its molotov and incendiary fires burn zombies on the server with hits from the molotov: a zombie they kill died of fire, never of a blow to the head.
 - **Bandits:** they never rise.
 - **Project A-Life:** its NPCs never rise here, whichever mod's death handler runs first, and Finish off leaves their corpses alone. A-Life turns infected NPCs itself, with its own Put down.
 - **Day and night mods:** a mod can drive rising through the API. [Crepuscular](https://steamcommunity.com/sharedfiles/filedetails/?id=3820511464) does: its `rise=` and `wake=` set the share and when corpses get up, by day, night and event.
@@ -232,7 +235,8 @@ From the mods' code where it is public. None of these was tested together with R
 - Head kills: that a shot aimed at the head, a melee hit the game lands on the head and the knife stab through the jaw keep a zombie down, in single player and on a server.
 - The groan: that the zombie voice played at a corpse sounds as a groan, and that on a server the players near the corpse hear it and those far off don't.
 - Rise counts: that a risen zombie that walked out of the loaded area, and one after a restart, comes back with its count.
-- Fire: that a zombie killed by a molotov's blast before it burns, or on a burning square, stays down.
+- Fire: that a zombie killed on a burning square, or by Viewpoint Advanced Throwables' molotov fire, stays down.
+- Viewpoint True Ballistics: that a kill by a shot in the head stays down, in single player and on a server.
 - Project A-Life: that its NPCs stay down with A-Life before and after Relentless Dead in the mod list.
 - Finish off on a server: that a player who loads the area later sees the corpse as finished off.
 - Burning: that a burn the server refuses keeps the corpse down, and that a due corpse doesn't stand up in the fire.
