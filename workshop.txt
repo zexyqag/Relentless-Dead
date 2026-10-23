@@ -7,23 +7,25 @@ description=
 description=Killed zombies can get back up where they fell, hours later. Burn them or finish them off to make sure they stay down.
 description=
 description=[h2]THE DEAD GET BACK UP[/h2]
-description=It works as soon as it's enabled, no setup needed. Out of the box half of the zombies you kill get back up an hour or two later, once each. They rise in the clothes they died in, as ordinary zombies, and every rise counts as another kill.
+description=It works as soon as it's enabled, no setup needed. Out of the box half of the zombies you kill get back up an hour or two later, and again each time you kill them, unless you set a limit. They rise in the clothes they died in, as ordinary zombies, and every rise counts as another kill.
+description=A corpse about to get up groans a few seconds before, so you can hear it coming; hardcore players can turn that off.
 description=
 description=[h2]KEEP THEM DOWN[/h2]
 description=[list]
 description=[*]Burn the corpse with petrol and a lighter.
 description=[*]Finish off: right-click a zombie corpse to make sure of it. Each corpse can be finished off once, by anyone, and it's offered on every corpse, so the menu never tells you which ones would rise.
-description=[*]Optional: a melee hit to the head of a zombie on the floor keeps it down.
+description=[*]Optional: head kills keep them down, from a headshot, a blow the game lands on the head or a knife through the jaw.
 description=[/list]
-description=Bandits never rise, nor do zombies that lost their head.
+description=Bandits from [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3268487204]Bandits NPC[/url] never rise, nor do zombies that lost their head.
 description=
 description=[h2]YOUR RULES[/h2]
-description=Choose how many rise, how soon, how often one body can rise, whether players' zombies and corpses in safehouses rise, and whether Finish off and head hits are allowed. Everything is a sandbox option, on any server.
+description=Choose how many rise, how soon, how often one body can rise, whether players' zombies and corpses in safehouses rise, whether Finish off and head kills are allowed, and whether corpses groan first. Everything is a sandbox option, on any server.
 description=
 description=[h2]OTHER MODS[/h2]
 description=[list]
-description=[*]Zombie Dismemberment: headless corpses and zombies with no arms and a lost leg stay down, and Finish off takes the head off.
-description=[*]Day and night mods can decide when the dead rise: Crepuscular makes the night's kills rise in the dark.
+description=[*][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3811483602]Zombie Dismemberment[/url]: headless corpses and zombies with no arms and a lost leg stay down, and Finish off takes the head off.
+description=[*]Day and night mods can decide when the dead rise: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3820511464]Crepuscular[/url] makes the night's kills rise in the dark.
+description=[*][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3803984183]Project A-Life[/url]: its NPCs never rise here and Finish off leaves their corpses alone; A-Life turns infected NPCs itself.
 description=[*]Modders can keep their monsters down, keep a corpse down or react to a rise through a small API.
 description=[/list]
 description=

@@ -35,7 +35,7 @@ option RelentlessDead.MaxRises
     type = integer,
     min = 0,
     max = 20,
-    default = 1,
+    default = 0,
     page = RelentlessDead,
     translation = RelentlessDead_MaxRises,
 }
@@ -48,6 +48,24 @@ option RelentlessDead.RiseMaxAgeHours
     default = 168,
     page = RelentlessDead,
     translation = RelentlessDead_RiseMaxAgeHours,
+}
+
+option RelentlessDead.RiseWarning
+{
+    type = boolean,
+    default = true,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseWarning,
+}
+
+option RelentlessDead.RiseWarningMinutes
+{
+    type = integer,
+    min = 1,
+    max = 10,
+    default = 2,
+    page = RelentlessDead,
+    translation = RelentlessDead_RiseWarningMinutes,
 }
 
 option RelentlessDead.FireStaysDown
@@ -76,12 +94,12 @@ option RelentlessDead.FinishOffSeconds
     translation = RelentlessDead_FinishOffSeconds,
 }
 
-option RelentlessDead.HeadHitsStayDown
+option RelentlessDead.HeadKillsStayDown
 {
     type = boolean,
     default = false,
     page = RelentlessDead,
-    translation = RelentlessDead_HeadHitsStayDown,
+    translation = RelentlessDead_HeadKillsStayDown,
 }
 
 option RelentlessDead.RiseInSafehouses

@@ -12,14 +12,19 @@ require "RelentlessDead/API"
 -- Killed zombies that get back up. At its death a zombie is marked to rise by the rise in effect;
 -- while wake is on, its corpse rises once due, as a corpse playing dead does, so the zombie stays
 -- one of the population. Rise and wake are a driving mod's (see API), else RiseChance and always.
+-- With RiseWarning on, a corpse a check lets rise groans, and gets up RiseWarningMinutes later.
 --
 -- Registry: { next = the next id, low = no registered id is below it, count, entries = { [id] = {
---   x, y, z, due, died, misses } } }, ids given in registration order. x, y, z: the square the zombie
---   died on, or the one its corpse was put down on; due and died: world-age hours; misses: scans that
---   found the area loaded but neither the corpse nor someone dragging it.
+--   x, y, z, due, died, misses, rising } } }, ids given in registration order. x, y, z: the square the
+--   zombie died on, or the one its corpse was put down on; due and died: world-age hours; misses: scans
+--   that found the area loaded but neither the corpse nor someone dragging it; rising: the world-age
+--   hour a corpse that groaned gets up at.
+-- Risen: { count, entries = { [id] = { outfit, rises, x, y, z, seen } } }, the risen zombies by the id
+--   of the corpse each rose from, with its outfit and where a check last saw it. The game keeps no
+--   modData of a zombie it unloads, so one it loads again in that outfit near there is taken for it.
 -- Marker, the modData field RelentlessDead, which a corpse copies from its zombie and a zombie from
---   the corpse it rose from: { id, rises, due, died } on a registered corpse, { rises } on a risen
---   zombie. A corpse without an id never rises.
+--   the corpse it rose from: { id, rises, due, died } on a registered corpse, { rises, riser } on a
+--   risen zombie, riser being its id in Risen. A corpse without an id never rises.
 local Rising = {}
 
 -- Scans that miss a corpse before its entry is dropped: a corpse being dragged is a zombie, not a
@@ -34,8 +39,15 @@ local SEARCHES = 5
 local REACH = 3
 -- Milliseconds between a head-hit report and the death it belongs to, in either order.
 local WINDOW = 5000
-
-local UNDYING = "\\UndyingZombies"
+-- Milliseconds from a hit to the death it causes, which the game runs within the hit.
+local MOMENT = 1000
+-- Tiles from where a check last saw a risen zombie within which a zombie loaded in its outfit is it.
+local SEEK = 20
+local MINUTE = 1 / 60
+local HEADS = { shot = "shot in the head", jaw = "stabbed through the jaw", head = "hit on the head" }
+-- PersistentOutfits.NO_HAT_BIT, which the game sets in the outfit ID once the hat has fallen off.
+local HAT = 32768
+local VOICES = { "A", "B", "C" }
 
 -- Since this game started, for the status.
 local counts = { marked = 0, down = 0, rose = 0, gone = 0, expired = 0, dropped = 0, finished = 0 }
@@ -138,11 +150,165 @@ local function place(x, y, z)
     return math.floor(x) .. "," .. math.floor(y) .. "," .. math.floor(z)
 end
 
+-- ------------------------------------------------------------------ risen zombies
+
+local function risen()
+    local book = ModData.getOrCreate(Body.RISEN)
+    if book.entries == nil then
+        book.count, book.entries = 0, {}
+    end
+    return book
+end
+
+-- The outfit ID without the hat bit. Kahlua's % keeps the sign of a negative ID.
+local function outfitOf(z)
+    local id = z:getPersistentOutfitID()
+    if id - math.floor(id / 65536) * 65536 >= HAT then
+        return id - HAT
+    end
+    return id
+end
+
+-- Risen id -> its zombie, once this game has had it loaded.
+local here = {}
+-- Outfit -> { [risen id] = true }, made from Risen when first needed.
+local outfits = nil
+
+local function byOutfit(book)
+    if outfits == nil then
+        outfits = {}
+        for id, r in pairs(book.entries) do
+            outfits[r.outfit] = outfits[r.outfit] or {}
+            outfits[r.outfit][id] = true
+        end
+    end
+    return outfits
+end
+
+local function index(book, id, outfit)
+    local all = byOutfit(book)
+    all[outfit] = all[outfit] or {}
+    all[outfit][id] = true
+end
+
+local function unindex(book, id)
+    local ids = byOutfit(book)[book.entries[id].outfit]
+    if ids ~= nil then
+        ids[id] = nil
+    end
+end
+
+local function see(book, id, z)
+    local r = book.entries[id]
+    local outfit = outfitOf(z)
+    if outfit ~= r.outfit then
+        unindex(book, id)
+        r.outfit = outfit
+        index(book, id, outfit)
+    end
+    r.x, r.y, r.z, r.seen = z:getX(), z:getY(), z:getZ(), hours()
+    here[id] = z
+end
+
+-- z just rose from the corpse id, its rises-th rise.
+local function remember(id, z, rises)
+    local book = risen()
+    local outfit = outfitOf(z)
+    book.entries[id] = { outfit = outfit, rises = rises }
+    book.count = book.count + 1
+    index(book, id, outfit)
+    see(book, id, z)
+end
+
+local function forget(id)
+    local book = risen()
+    if book.entries[id] == nil then
+        return
+    end
+    unindex(book, id)
+    book.entries[id] = nil
+    book.count = book.count - 1
+    here[id] = nil
+end
+
+-- Whether the risen zombie id is in the world now. Once the game has unloaded it, its object has no
+-- square, or has been reused, with its modData wiped.
+local function loaded(id)
+    local old = here[id]
+    if old == nil or old:getCurrentSquare() == nil then
+        return false
+    end
+    local m = marker(old)
+    return m ~= nil and m.riser == id
+end
+
+-- A zombie the game creates, from its population or a save, takes up the count of the risen zombie
+-- whose outfit it has, if it is within SEEK tiles of where a check last saw that one.
+local function claim(z)
+    local book = risen()
+    if book.count == 0 then
+        return
+    end
+    local ids = byOutfit(book)[outfitOf(z)]
+    if ids == nil then
+        return
+    end
+    local best, distance = nil, nil
+    for id in pairs(ids) do
+        local r = book.entries[id]
+        local dx, dy = r.x - z:getX(), r.y - z:getY()
+        local d = dx * dx + dy * dy
+        if d <= SEEK * SEEK and not loaded(id) and (best == nil or d < distance or (d == distance and id < best)) then
+            best, distance = id, d
+        end
+    end
+    if best == nil then
+        return
+    end
+    local r = book.entries[best]
+    z:getModData()[Body.MARK] = { rises = r.rises, riser = best }
+    see(book, best, z)
+    Log.info("risen zombie " .. best .. " is back at " .. place(z:getX(), z:getY(), z:getZ()) .. " with " .. r.rises .. " rises")
+end
+
+-- Where the loaded risen zombies are, for when the game unloads them; above RiserLimit, those not
+-- seen the longest are forgotten.
+local function track()
+    local book = risen()
+    if book.count == 0 then
+        return
+    end
+    local zombies = getCell():getZombieList()
+    for i = 0, zombies:size() - 1 do
+        local z = zombies:get(i)
+        local m = marker(z)
+        if m ~= nil and m.riser ~= nil and book.entries[m.riser] ~= nil then
+            see(book, m.riser, z)
+        end
+    end
+    local extra = book.count - Settings.riserLimit()
+    if extra <= 0 then
+        return
+    end
+    local ids = {}
+    for id in pairs(book.entries) do
+        ids[#ids + 1] = id
+    end
+    table.sort(ids, function(a, b)
+        local sa, sb = book.entries[a].seen, book.entries[b].seen
+        return sa < sb or (sa == sb and a < b)
+    end)
+    for i = 1, extra do
+        forget(ids[i])
+    end
+    Log.info(extra .. " risen zombies not seen the longest are forgotten: more than RiserLimit")
+end
+
 -- ------------------------------------------------------------------ keeping down
 
 -- Takes the marker off, ends its entry and cancels a revival timer the game holds for a zombie's
--- corpse, as Undying Zombies sets. A player's corpse keeps its timer: the game revives infected
--- players with it. Returns whether the corpse was due to rise.
+-- corpse, whoever set it. A player's corpse keeps its timer: the game revives infected players with
+-- it. Returns whether the corpse was due to rise.
 local function unmark(body, why)
     local m = marker(body)
     local rising = false
@@ -180,18 +346,30 @@ function ISBurnCorpseAction:complete()
     return burnComplete(self)
 end
 
--- ------------------------------------------------------------------ head hits
+-- ------------------------------------------------------------------ head kills
 
 -- Zombie -> when a player's game reported a floor head hit on it, in milliseconds.
 local reports = setmetatable({}, { __mode = "k" })
--- Online ID -> { at, x, y, z, id, zombie } of a registered zombie that just died, for a report that
+-- Zombie -> { by, at } of a player whose game reported that its player killed it with a blow to the
+-- head, before the hit reached this game.
+local claims = setmetatable({}, { __mode = "k" })
+-- Online ID -> { at, x, y, z, id, zombie, by } of a registered zombie that just died, for a report that
 -- comes after the death: the hit and the report travel in different packets.
 local deaths = {}
+-- The last zombie hit on this game: { zombie, by, at, head, fire }. The game fires OnHitZombie as a
+-- hit starts and, when the hit kills, OnZombieDead within the same hit.
+local strike = nil
 
 local function headHit(z)
     local at = reports[z]
     reports[z] = nil
     return at ~= nil and getTimestampMs() - at <= WINDOW
+end
+
+local function claimed(z)
+    local c = claims[z]
+    claims[z] = nil
+    return c ~= nil and c.by == z:getAttackedBy() and getTimestampMs() - c.at <= WINDOW
 end
 
 local function rememberDeath(z, id, x, y, level)
@@ -205,7 +383,39 @@ local function rememberDeath(z, id, x, y, level)
     for _, key in ipairs(old) do
         deaths[key] = nil
     end
-    deaths[z:getOnlineID()] = { at = now, x = x, y = y, z = level, id = id, zombie = z }
+    deaths[z:getOnlineID()] = { at = now, x = x, y = y, z = level, id = id, zombie = z, by = z:getAttackedBy() }
+end
+
+-- A weapon that starts fires, as a molotov does: its blast can kill before the zombie burns.
+local function incendiary(weapon)
+    return weapon ~= nil and (weapon:getFireRange() > 0 or weapon:getFireStartingChance() > 0)
+end
+
+Events.OnHitZombie.Add(function(z, wielder, part, weapon)
+    strike = { zombie = z, by = wielder, at = getTimestampMs(), head = Body.headStrike(z, wielder, part, weapon),
+        fire = incendiary(weapon) }
+end)
+
+-- The hit that killed z, dying now, or nil. A death without a hit, as by fire, has no attacker.
+local function killing(z)
+    local s = strike
+    if s == nil or s.zombie ~= z then
+        return nil
+    end
+    strike = nil
+    if s.by ~= z:getAttackedBy() or getTimestampMs() - s.at > MOMENT then
+        return nil
+    end
+    return s
+end
+
+-- Whether z dies of fire: burning, on a square with a fire, or by the blast of a weapon that starts fires.
+local function burned(z, s)
+    if z:isOnFire() or (s ~= nil and s.fire) then
+        return true
+    end
+    local square = getCell():getGridSquare(z:getX(), z:getY(), z:getZ())
+    return square ~= nil and square:haveFire()
 end
 
 -- ------------------------------------------------------------------ marking at death
@@ -214,10 +424,13 @@ end
 -- The game reuses dead zombies and fires OnZombieCreate for each new life.
 local handled = setmetatable({}, { __mode = "k" })
 
--- Why z stays down, or nil. rise: the rise in effect.
-local function staysDown(z, m, rise)
+-- Why z stays down, or nil. rise: the rise in effect; s: the hit that killed it, or nil.
+local function staysDown(z, m, rise, s)
     if z:getVariableBoolean("Bandit") then
         return "a Bandit"
+    end
+    if Body.npc(z) then
+        return "an A-Life NPC"
     end
     if Body.headless(z) then
         return "its head is off"
@@ -232,11 +445,19 @@ local function staysDown(z, m, rise)
     if z:isReanimatedPlayer() and not Settings.risePlayers() then
         return "a player's zombie"
     end
-    if z:isOnFire() and Settings.fireStaysDown() then
+    if Settings.fireStaysDown() and burned(z, s) then
         return "it burned"
     end
-    if Settings.headHitsStayDown() and headHit(z) then
-        return "hit on the head on the floor"
+    if Settings.headKillsStayDown() then
+        if s ~= nil and s.head ~= nil then
+            return HEADS[s.head]
+        end
+        if claimed(z) then
+            return "a blow to the head, as its attacker's game saw it"
+        end
+        if headHit(z) then
+            return "hit on the head on the floor"
+        end
     end
     local max = Settings.maxRises()
     if max > 0 and m ~= nil and m.rises >= max then
@@ -301,8 +522,11 @@ local function died(z)
         dropped(z, m)
         return
     end
+    if m ~= nil and m.riser ~= nil then
+        forget(m.riser)
+    end
     local x, y, level = math.floor(z:getX()), math.floor(z:getY()), math.floor(z:getZ())
-    local why = staysDown(z, m, Hooks.phase().rise)
+    local why = staysDown(z, m, Hooks.phase().rise, killing(z))
     if why ~= nil then
         if m ~= nil then
             z:getModData()[Body.MARK] = nil
@@ -323,7 +547,7 @@ local function died(z)
     z:getModData()[Body.MARK] = { id = id, rises = rises, due = due, died = now }
     add(reg, id, { x = x, y = y, z = level, due = due, died = now, misses = 0 })
     counts.marked = counts.marked + 1
-    if isServer() and Settings.headHitsStayDown() then
+    if isServer() and Settings.headKillsStayDown() then
         rememberDeath(z, id, x, y, level)
     end
     Log.info("zombie killed at " .. place(x, y, level) .. " marked to rise as corpse " .. id .. " from " .. stamp(due))
@@ -401,6 +625,12 @@ local function heldDown(body)
     return nil
 end
 
+local function cantPlayDead(body)
+    keepDown(body, "it can't play dead")
+    Log.warnOnce("risers can't play dead", "a corpse on stairs, and every corpse while ZombieLore.DisableFakeDead"
+        .. " is 3 (never), can't play dead, so it stays down instead of rising")
+end
+
 -- Returns true if the corpse rose.
 local function raise(id, body)
     local why = heldDown(body)
@@ -410,18 +640,24 @@ local function raise(id, body)
     end
     body:setFakeDead(true)
     if not body:isFakeDead() then
-        keepDown(body, "it can't play dead")
-        Log.warnOnce("risers can't play dead", "a corpse on stairs, and every corpse while ZombieLore.DisableFakeDead"
-            .. " is 3 (never), can't play dead, so it stays down instead of rising")
+        cantPlayDead(body)
         return false
     end
     local square = body:getSquare()
     local data = body:getModData()
-    local rises = data[Body.MARK].rises + 1
-    data[Body.MARK] = { rises = rises }
+    local mark = data[Body.MARK]
+    local rises = mark.rises + 1
+    data[Body.MARK] = { rises = rises, riser = id }
     Hooks.beforeRise(body)
     local z = body:reanimate()
+    if z == nil then
+        data[Body.MARK] = mark
+        body:setFakeDead(false)
+        Log.warnOnce("no zombie ID", "the server has no zombie ID left, so corpses wait to rise")
+        return false
+    end
     remove(registry(), id)
+    remember(id, z, rises)
     counts.rose = counts.rose + 1
     Log.info("corpse " .. id .. " rose at " .. place(square:getX(), square:getY(), square:getZ()) .. ", rise " .. rises
         .. " of this body")
@@ -429,7 +665,108 @@ local function raise(id, body)
     return true
 end
 
+-- ------------------------------------------------------------------ the warning before rising
+
+-- Ids of the corpses that groaned and wait to get up, made from the registry when first needed.
+local groaned = nil
+
+local function waiting()
+    if groaned == nil then
+        groaned = {}
+        for id, e in pairs(registry().entries) do
+            if e.rising ~= nil then
+                groaned[id] = true
+            end
+        end
+    end
+    return groaned
+end
+
+-- A zombie's voice from the corpse. A server sends it to every player's game that has the corpse's
+-- area loaded or is within 10 tiles of it, and each plays it there.
+local function groan(id, body)
+    local voice = "MaleZombieVoice"
+    if body:isFemale() then
+        voice = "FemaleZombieVoice"
+    end
+    voice = voice .. VOICES[id % 3 + 1]
+    local square = body:getSquare()
+    if isServer() then
+        playServerSound(voice, square)
+    else
+        square:playSound(voice)
+    end
+end
+
+-- The corpse rises now, or with RiseWarning on groans and gets up RiseWarningMinutes later. Returns
+-- true if it rose or groaned.
+local function start(id, e, body, now)
+    if not Settings.riseWarning() then
+        return raise(id, body)
+    end
+    local why = heldDown(body)
+    if why ~= nil then
+        keepDown(body, why)
+        return false
+    end
+    local was = body:isFakeDead()
+    body:setFakeDead(true)
+    local plays = body:isFakeDead()
+    body:setFakeDead(was)
+    if not plays then
+        cantPlayDead(body)
+        return false
+    end
+    groan(id, body)
+    e.rising = now + Settings.riseWarningMinutes() * MINUTE
+    waiting()[id] = true
+    Log.info("corpse " .. id .. " groans at " .. place(body:getX(), body:getY(), body:getZ()) .. " and gets up at "
+        .. stamp(e.rising))
+    return true
+end
+
+-- Each in-game minute, the corpses that groaned get up once their time has come, wherever they lie
+-- now. One that isn't found then (being dragged, or its area unloaded) waits for a check, and groans
+-- again before it gets up.
+local function getUp()
+    local list = waiting()
+    local reg = registry()
+    local now = hours()
+    local stale, ready = {}, {}
+    for id in pairs(list) do
+        local e = reg.entries[id]
+        if e == nil or e.rising == nil then
+            stale[#stale + 1] = id
+        elseif e.rising < now + MINUTE / 2 then
+            ready[#ready + 1] = id
+        end
+    end
+    for _, id in ipairs(stale) do
+        list[id] = nil
+    end
+    table.sort(ready)
+    local cell = getCell()
+    for _, id in ipairs(ready) do
+        list[id] = nil
+        -- A function run by an earlier rise may have kept this corpse down.
+        local e = reg.entries[id]
+        if e ~= nil then
+            e.rising = nil
+            local body = nil
+            if cell:getGridSquare(e.x, e.y, 0) ~= nil then
+                body = holder(cell:getGridSquare(e.x, e.y, e.z), id) or search(cell, e, id)
+            end
+            if body == nil then
+                Log.info("corpse " .. id .. " isn't there to get up, so it waits for a check")
+            else
+                raise(id, body)
+            end
+        end
+    end
+end
+
 local function scan()
+    track()
     local reg = registry()
     if reg.count == 0 then
         return
@@ -443,10 +780,12 @@ local function scan()
     local now = hours()
     local old, due = {}, {}
     for id, e in pairs(reg.entries) do
-        if tooOld(e.died, now, maxAge) then
-            old[#old + 1] = id
-        elseif wake and e.due <= now then
-            due[#due + 1] = id
+        if e.rising == nil then
+            if tooOld(e.died, now, maxAge) then
+                old[#old + 1] = id
+            elseif wake and e.due <= now then
+                due[#due + 1] = id
+            end
         end
     end
     for _, id in ipairs(old) do
@@ -458,9 +797,9 @@ local function scan()
     local budget = Settings.risesPerScan()
     local searches = SEARCHES * budget
     local dragging = nil
-    local result = { at = now, due = #due, rose = 0, unloaded = 0, missed = 0, waiting = 0 }
+    local result = { at = now, due = #due, up = 0, unloaded = 0, missed = 0, waiting = 0 }
     for _, id in ipairs(due) do
-        if result.rose >= budget then
+        if result.up >= budget then
             break
         end
         local e = reg.entries[id]
@@ -488,8 +827,8 @@ local function scan()
                     end
                 end
             end
-            if body ~= nil and raise(id, body) then
-                result.rose = result.rose + 1
+            if body ~= nil and start(id, e, body, now) then
+                result.up = result.up + 1
             end
         end
     end
@@ -498,9 +837,13 @@ end
 
 Events.OnZombieCreate.Add(function(z)
     handled[z] = nil
+    claim(z)
 end)
 Events.OnZombieDead.Add(died)
 Events.EveryTenMinutes.Add(scan)
+Events.EveryOneMinute.Add(getUp)
+-- Single player saves its zombies where they stand: their places are noted first.
+Events.OnSave.Add(track)
 
 -- ------------------------------------------------------------------ finish off and head hits
 
@@ -526,7 +869,7 @@ function Rising.finishOff(player, args)
     local bodies = square:getDeadBodys()
     for i = 0, bodies:size() - 1 do
         local body = bodies:get(i)
-        if wanted[body:getObjectIDAsLong()] and body:isZombie() and not Body.finished(body) then
+        if wanted[body:getObjectIDAsLong()] and body:isZombie() and not Body.finished(body) and not Body.npc(body) then
             if unmark(body, "finished off") then
                 n = n + 1
             end
@@ -545,26 +888,25 @@ end
 
 -- A player's game saw its own player hit z on the head while z lay on the floor.
 function Rising.headHit(player, z)
-    if Settings.headHitsStayDown() and near(player, z:getX(), z:getY(), z:getZ()) then
+    if Settings.headKillsStayDown() and near(player, z:getX(), z:getY(), z:getZ()) then
         reports[z] = getTimestampMs()
     end
 end
 
--- The same, from a player's game in multiplayer, by the zombie's online ID: it may have died here first.
-local function headHitById(player, id)
+-- The zombie that has the online ID id here, alive, or nil.
+local function alive(id)
     local zombies = getCell():getZombieList()
     for i = 0, zombies:size() - 1 do
         local z = zombies:get(i)
         if z:getOnlineID() == id and not z:isDead() then
-            Rising.headHit(player, z)
-            return
+            return z
         end
     end
-    local death = deaths[id]
-    if death == nil or getTimestampMs() - death.at > WINDOW or not near(player, death.x + 0.5, death.y + 0.5, death.z)
-        or not Settings.headHitsStayDown() then
-        return
-    end
+    return nil
+end
+
+-- A late report keeps down the corpse of a registered zombie that died here.
+local function downAfterDeath(id, death, why)
     deaths[id] = nil
     -- Its corpse may come later, with a copy of its modData.
     death.zombie:getModData()[Body.MARK] = nil
@@ -575,11 +917,50 @@ local function headHitById(player, id)
     end
     local body = search(getCell(), e, death.id)
     if body ~= nil then
-        keepDown(body, "hit on the head on the floor")
+        keepDown(body, why)
     else
         remove(reg, death.id)
         counts.down = counts.down + 1
-        Log.info("corpse " .. death.id .. " stays down: hit on the head on the floor")
+        Log.info("corpse " .. death.id .. " stays down: " .. why)
+    end
+end
+
+local function late(id)
+    local death = deaths[id]
+    if death == nil or getTimestampMs() - death.at > WINDOW or not Settings.headKillsStayDown() then
+        return nil
+    end
+    return death
+end
+
+-- A floor head hit, from a player's game in multiplayer, by the zombie's online ID: it may have died
+-- here first.
+local function headHitById(player, id)
+    local z = alive(id)
+    if z ~= nil then
+        Rising.headHit(player, z)
+        return
+    end
+    local death = late(id)
+    if death ~= nil and near(player, death.x + 0.5, death.y + 0.5, death.z) then
+        downAfterDeath(id, death, "hit on the head on the floor")
+    end
+end
+
+-- A player's game saw its player kill the zombie with a shot in the head or the knife stab through the
+-- jaw: this game may not know where the blow landed. It counts only if that player killed it here.
+local function headKillById(player, id)
+    if not Settings.headKillsStayDown() then
+        return
+    end
+    local z = alive(id)
+    if z ~= nil then
+        claims[z] = { by = player, at = getTimestampMs() }
+        return
+    end
+    local death = late(id)
+    if death ~= nil and death.by == player then
+        downAfterDeath(id, death, "a blow to the head, as its attacker's game saw it")
     end
 end
 
@@ -614,33 +995,25 @@ local function report()
     end
     local scanned = "no scan yet"
     if last ~= nil then
-        scanned = "last scan " .. stamp(last.at) .. ": " .. last.due .. " due, " .. last.rose .. " rose, " .. last.unloaded
+        scanned = "last scan " .. stamp(last.at) .. ": " .. last.due .. " due, " .. last.up .. " getting up, " .. last.unloaded
             .. " not loaded, " .. last.missed .. " not found, " .. last.waiting .. " left for the next check"
     end
     local lines = {
         "Relentless Dead " .. getModInfoByID("RelentlessDead"):getModVersion(),
         "risers: rise " .. tostring(phase.rise) .. ", wake " .. string.lower(wake) .. ", set by " .. source .. "; " .. reg.count
-            .. " corpses registered (at most " .. Settings.riserLimit() .. "), " .. due .. " due; " .. scanned,
+            .. " corpses registered (at most " .. Settings.riserLimit() .. "), " .. due .. " due; " .. risen().count
+            .. " risen zombies counted; " .. scanned,
         "this session: " .. counts.marked .. " marked to rise, " .. counts.down .. " kept down, " .. counts.rose .. " rose, "
             .. counts.finished .. " finished off, " .. counts.gone .. " gone, " .. counts.expired .. " too old, "
             .. counts.dropped .. " over the limit",
         Hooks.status(),
         "Zombie Dismemberment: " .. Body.dismembermentStatus(),
     }
-    if getActivatedMods():contains(UNDYING) then
-        lines[#lines + 1] = "warning: Undying Zombies is loaded too: its revival timers raise corpses whatever this mod's"
-            .. " options say, except those this mod keeps down; use just one of the two"
-    end
     return { text = "IGUI_RelentlessDead_Status", args = { reg.count, tostring(phase.rise), { key = "IGUI_RelentlessDead_" .. wake } },
         lines = lines }
 end
 
 Hooks.report = report
-
-if getActivatedMods():contains(UNDYING) then
-    Log.warn("Undying Zombies is loaded too: its revival timers raise corpses whatever this mod's options say, except"
-        .. " those this mod keeps down; use just one of the two")
-end
 
 Events.OnClientCommand.Add(function(module, command, player, args)
     if module ~= Body.MODULE or type(args) ~= "table" then
@@ -650,6 +1023,8 @@ Events.OnClientCommand.Add(function(module, command, player, args)
         Rising.finishOff(player, args)
     elseif command == "headHit" then
         headHitById(player, args.id)
+    elseif command == "headKill" then
+        headKillById(player, args.id)
     elseif command == "status" then
         local reply
         if allowed(player) then

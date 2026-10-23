@@ -5,8 +5,10 @@ local Log = require "RelentlessDead/Log"
 local Body = {}
 
 Body.MODULE = "RelentlessDead"
--- Kept by the server, which never sends it: the registry of corpses that rise (see Rising).
+-- Kept by the server, which never sends them: the registry of corpses that rise, and the risen zombies
+-- whose rises it counts (see Rising).
 Body.REGISTRY = "RelentlessDeadRisers"
+Body.RISEN = "RelentlessDeadRisen"
 -- modData fields: the marker of a corpse that rises (see Rising), and the flag every game sets on
 -- a corpse finished off.
 Body.MARK = "RelentlessDead"
@@ -14,11 +16,24 @@ Body.FINISHED = "RelentlessDeadFinished"
 
 local DISMEMBERMENT = "\\ZombieDismembermentB42"
 local ARMS = { ForeArm = true, UpperArm = true }
+-- zombie.combat.HitReaction values of a shot in the head.
+local SHOTS = { ShotHeadFwd = true, ShotHeadFwd02 = true, ShotHeadBwd = true }
 
 local dismemberment = getActivatedMods():contains(DISMEMBERMENT)
 
 function Body.headless(o)
     return o:hasModData() and o:getModData().ZD_Head == "Decapitated"
+end
+
+-- A Project A-Life NPC, alive, dying or dead: A-Life keeps the NPC's id in its modData from its
+-- creation, and its corpse's owner from its death. A-Life's own death handler clears its other marks,
+-- before or after this mod's as the mod list orders them, but keeps these.
+function Body.npc(o)
+    if not o:hasModData() then
+        return false
+    end
+    local data = o:getModData()
+    return type(data.ProjectALifeUID) == "string" or type(data.ProjectALifeCorpseOf) == "string"
 end
 
 -- Both arms cut off and a leg lost: Zombie Dismemberment keeps such a zombie on the floor.
@@ -28,6 +43,32 @@ function Body.crippled(o)
     end
     local data = o:getModData()
     return ARMS[data.ZD_L] == true and ARMS[data.ZD_R] == true and (data.ZD_LegL == "WholeLeg" or data.ZD_LegR == "WholeLeg")
+end
+
+-- Where a hit, as OnHitZombie gives it, struck the head, or nil: "shot", by a firearm's hit reaction,
+-- which the shooter's game sets before the hit and a server takes from the hit it receives; "jaw", the
+-- knife stab through the jaw, the attack's own reaction; "head", a melee hit whose spot the game
+-- picked on the head, each game picking its own.
+function Body.headStrike(z, wielder, part, weapon)
+    if weapon == nil then
+        return nil
+    end
+    if weapon:isRanged() then
+        if SHOTS[z:getHitReaction()] then
+            return "shot"
+        end
+        return nil
+    end
+    if weapon:isExplosive() then
+        return nil
+    end
+    if wielder:getVariableString("ZombieHitReaction") == "KnifeDeath" then
+        return "jaw"
+    end
+    if part == BodyPartType.Head then
+        return "head"
+    end
+    return nil
 end
 
 -- Whether Finish off is done with it: finished off, or its head is off, which every player sees.

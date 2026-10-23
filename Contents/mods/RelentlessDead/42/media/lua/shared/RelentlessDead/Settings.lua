@@ -6,12 +6,14 @@ local DEFAULTS = {
     RiseChance = 50,
     RiseDelayMin = 1.0,
     RiseDelayMax = 2.0,
-    MaxRises = 1,
+    MaxRises = 0,
     RiseMaxAgeHours = 168,
+    RiseWarning = true,
+    RiseWarningMinutes = 2,
     FireStaysDown = true,
     FinishOff = true,
     FinishOffSeconds = 3,
-    HeadHitsStayDown = false,
+    HeadKillsStayDown = false,
     RiseInSafehouses = false,
     RisePlayers = false,
     RisesPerScan = 10,
@@ -91,6 +93,15 @@ function Settings.riseMaxAgeHours()
     return integer("RiseMaxAgeHours", 0, 8760)
 end
 
+function Settings.riseWarning()
+    return boolean("RiseWarning")
+end
+
+-- In-game minutes from a corpse's groan until it gets up.
+function Settings.riseWarningMinutes()
+    return integer("RiseWarningMinutes", 1, 10)
+end
+
 function Settings.fireStaysDown()
     return boolean("FireStaysDown")
 end
@@ -103,8 +114,8 @@ function Settings.finishOffSeconds()
     return integer("FinishOffSeconds", 1, 30)
 end
 
-function Settings.headHitsStayDown()
-    return boolean("HeadHitsStayDown")
+function Settings.headKillsStayDown()
+    return boolean("HeadKillsStayDown")
 end
 
 function Settings.riseInSafehouses()
