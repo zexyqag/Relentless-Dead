@@ -251,4 +251,4 @@ end)
 
 Build 42 lists mod ids with a leading backslash, hence `"\\RelentlessDead"`. The marks the mod keeps in a corpse's modData are its own and may change; use the API.
 
-To work on Relentless Dead itself, see [CONTRIBUTING.md](CONTRIBUTING.md).
+To contribute to Relentless Dead, see [CONTRIBUTING.md](CONTRIBUTING.md).
