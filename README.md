@@ -21,12 +21,11 @@ A Project Zomboid Build 42 mod: killed zombies can get back up where they fell, 
 - [Options](#options)
 - [Status](#status)
 - [Multiplayer and performance](#multiplayer-and-performance)
-- [For modders](#for-modders)
 - [Compatibility](#compatibility)
 - [Known limitations](#known-limitations)
 - [Not yet verified in game](#not-yet-verified-in-game)
 - [Reporting problems](#reporting-problems)
-- [Publishing](#publishing)
+- [For mod authors](#for-mod-authors)
 
 ## What it does
 
@@ -34,7 +33,7 @@ When a zombie dies, a roll decides whether its corpse gets back up. A corpse mar
 
 **It works as soon as it is enabled, with no setup.** By default half of the zombies killed are marked, at any hour, and get up 1 to 2 in-game hours after their death, with a groan a few seconds before. A zombie that rose can rise again each time it is killed.
 
-Another mod can take over the share and decide when corpses get up, through the [API](#for-modders): a day and night mod can make only the night's kills rise, and only in the dark. While it does, the **Rise chance** option rests.
+Another mod can take over the share and decide when corpses get up, through the [API](#for-mod-authors): a day and night mod can make only the night's kills rise, and only in the dark. While it does, the **Rise chance** option rests.
 
 ## Marking
 
@@ -152,7 +151,53 @@ Right-click the world: **Relentless Dead status** is there in single player, and
 | `RiserLimit` (5000) | Marked corpses kept waiting, and risen zombies counted, in the save. While any risen zombie is counted, each check looks over the loaded zombies once to follow them. |
 | `Verbose` (off) | Every death, rise and keep-down written to the log. |
 
-## For modders
+## Compatibility
+
+From the mods' code where it is public. None of these was tested together with Relentless Dead in game yet.
+
+- **Zombie Dismemberment:** a zombie whose head it took off never rises, nor does one with both arms off and a leg lost, which it keeps on the floor. With its decapitation on (its own `Enabled` and `EnableDecapitation` options), Finish off takes the head off as it does, which removes hats, glasses and masks from the corpse, on the server and on every player's game that has the corpse loaded. Its author has not yet tested its multiplayer in a live session.
+- **Mods that raise corpses through the game's own revival timer:** every way this mod keeps a corpse down (Finish off, burning, head kills, the safehouse and other checks, `keepDown`) also cancels a revival timer the game holds for a zombie's corpse, whoever set it. A corpse this mod never marked can still rise through such a mod, by its rules.
+- **Viewpoint True Ballistics:** from its docs, its rounds hit through the game's own hit on the shooter's game, with the body part they struck, so a shot in the head that kills is a head kill. In multiplayer the shooter's game reports it (see [Head kills](#head-kills)). With its Hit locations option off, the game picks the part, as for any shot.
+- **[Viewpoint Advanced Throwables](https://steamcommunity.com/sharedfiles/filedetails/?id=3813194971):** its molotov and incendiary fires burn zombies on the server with hits from the molotov: a zombie they kill died of fire, never of a blow to the head.
+- **Bandits:** they never rise.
+- **Project A-Life:** its NPCs never rise here, whichever mod's death handler runs first, and Finish off leaves their corpses alone. A-Life turns infected NPCs itself, with its own Put down.
+- **Day and night mods:** a mod can drive rising through the API. [Crepuscular](https://steamcommunity.com/sharedfiles/filedetails/?id=3820511464) does: its `rise=` and `wake=` set the share and when corpses get up, by day, night and event.
+- **Special-zombie mods:** their monsters rise as any corpse does, in the same outfit, unless a veto keeps them down; what they can do after that is up to their own mod.
+- **The game's corpse removal** (`HoursForCorpseRemoval`) removes corpses whatever their mark. Players' corpses and the game's turning of infected players are left alone.
+- **Kill counters and XP mods:** each rise is another kill.
+
+## Known limitations
+
+- **Rise counts while unloaded** follow a risen zombie's outfit and where a check last saw it: one that the game moves more than 20 tiles from there while it is unloaded comes back with its count started over, and another zombie in the very same outfit and look that the game loads there first takes the count.
+- **The groan** is a zombie's voice played at the corpse; the corpse itself doesn't move. The game draws a lying corpse in the pose it died in and has no way to animate it.
+- **Corpses on stairs**, and every corpse while `ZombieLore.DisableFakeDead` is 3, can't rise.
+- **Corpses carried as an item** count as gone after three checks: put down again later, they stay down.
+- **A corpse finished off** on a server only shows as finished off on a player's game that has its area loaded then, or loads it later.
+
+## Not yet verified in game
+
+- That risers stand up at once, their animation, corpses loaded from saved areas, and the order of floor head-hit reports.
+- Head kills: that a shot aimed at the head, a melee hit the game lands on the head and the knife stab through the jaw keep a zombie down, in single player and on a server.
+- The groan: that the zombie voice played at a corpse sounds as a groan, and that on a server the players near the corpse hear it and those far off don't.
+- Rise counts: that a risen zombie that walked out of the loaded area, and one after a restart, comes back with its count.
+- Fire: that a zombie killed on a burning square, or by Viewpoint Advanced Throwables' molotov fire, stays down.
+- Viewpoint True Ballistics: that a kill by a shot in the head stays down, in single player and on a server.
+- Project A-Life: that its NPCs stay down with A-Life before and after Relentless Dead in the mod list.
+- Finish off on a server: that a player who loads the area later sees the corpse as finished off.
+- Burning: that a burn the server refuses keeps the corpse down, and that a due corpse doesn't stand up in the fire.
+- Zombie Dismemberment: Finish off's decapitation on a server and on each player's game, and looting such a corpse in multiplayer.
+
+## Reporting problems
+
+Open an issue in the [issue tracker](../../issues) with:
+
+1. single player or server, and the game version;
+2. your Relentless Dead options (the `RelentlessDead` table of `SandboxVars.lua`);
+3. the Status report and the `[RelentlessDead]` lines from the log (`Zomboid/console.txt`, or the server's log), with **Verbose log** on if you can;
+4. your other mods, especially those that drive rising, raise or dismember zombies;
+5. what you expected and what happened.
+
+## For mod authors
 
 `RelentlessDead.API` is a global on every game; `require "RelentlessDead/API"` loads it whichever mod loads first, and creates `Events.OnRisingRose`. Its `VERSION` is 1. Rising runs on the server and in single player, so what you give it there takes effect; `keepDown` and `status` refuse elsewhere.
 
@@ -206,71 +251,4 @@ end)
 
 Build 42 lists mod ids with a leading backslash, hence `"\\RelentlessDead"`. The marks the mod keeps in a corpse's modData are its own and may change; use the API.
 
-## Compatibility
-
-From the mods' code where it is public. None of these was tested together with Relentless Dead in game yet.
-
-- **Zombie Dismemberment:** a zombie whose head it took off never rises, nor does one with both arms off and a leg lost, which it keeps on the floor. With its decapitation on (its own `Enabled` and `EnableDecapitation` options), Finish off takes the head off as it does, which removes hats, glasses and masks from the corpse, on the server and on every player's game that has the corpse loaded. Its author has not yet tested its multiplayer in a live session.
-- **Mods that raise corpses through the game's own revival timer:** every way this mod keeps a corpse down (Finish off, burning, head kills, the safehouse and other checks, `keepDown`) also cancels a revival timer the game holds for a zombie's corpse, whoever set it. A corpse this mod never marked can still rise through such a mod, by its rules.
-- **Viewpoint True Ballistics:** from its docs, its rounds hit through the game's own hit on the shooter's game, with the body part they struck, so a shot in the head that kills is a head kill. In multiplayer the shooter's game reports it (see [Head kills](#head-kills)). With its Hit locations option off, the game picks the part, as for any shot.
-- **[Viewpoint Advanced Throwables](https://steamcommunity.com/sharedfiles/filedetails/?id=3813194971):** its molotov and incendiary fires burn zombies on the server with hits from the molotov: a zombie they kill died of fire, never of a blow to the head.
-- **Bandits:** they never rise.
-- **Project A-Life:** its NPCs never rise here, whichever mod's death handler runs first, and Finish off leaves their corpses alone. A-Life turns infected NPCs itself, with its own Put down.
-- **Day and night mods:** a mod can drive rising through the API. [Crepuscular](https://steamcommunity.com/sharedfiles/filedetails/?id=3820511464) does: its `rise=` and `wake=` set the share and when corpses get up, by day, night and event.
-- **Special-zombie mods:** their monsters rise as any corpse does, in the same outfit, unless a veto keeps them down; what they can do after that is up to their own mod.
-- **The game's corpse removal** (`HoursForCorpseRemoval`) removes corpses whatever their mark. Players' corpses and the game's turning of infected players are left alone.
-- **Kill counters and XP mods:** each rise is another kill.
-
-## Known limitations
-
-- **Rise counts while unloaded** follow a risen zombie's outfit and where a check last saw it: one that the game moves more than 20 tiles from there while it is unloaded comes back with its count started over, and another zombie in the very same outfit and look that the game loads there first takes the count.
-- **The groan** is a zombie's voice played at the corpse; the corpse itself doesn't move. The game draws a lying corpse in the pose it died in and has no way to animate it.
-- **Corpses on stairs**, and every corpse while `ZombieLore.DisableFakeDead` is 3, can't rise.
-- **Corpses carried as an item** count as gone after three checks: put down again later, they stay down.
-- **A corpse finished off** on a server only shows as finished off on a player's game that has its area loaded then, or loads it later.
-
-## Not yet verified in game
-
-- That risers stand up at once, their animation, corpses loaded from saved areas, and the order of floor head-hit reports.
-- Head kills: that a shot aimed at the head, a melee hit the game lands on the head and the knife stab through the jaw keep a zombie down, in single player and on a server.
-- The groan: that the zombie voice played at a corpse sounds as a groan, and that on a server the players near the corpse hear it and those far off don't.
-- Rise counts: that a risen zombie that walked out of the loaded area, and one after a restart, comes back with its count.
-- Fire: that a zombie killed on a burning square, or by Viewpoint Advanced Throwables' molotov fire, stays down.
-- Viewpoint True Ballistics: that a kill by a shot in the head stays down, in single player and on a server.
-- Project A-Life: that its NPCs stay down with A-Life before and after Relentless Dead in the mod list.
-- Finish off on a server: that a player who loads the area later sees the corpse as finished off.
-- Burning: that a burn the server refuses keeps the corpse down, and that a due corpse doesn't stand up in the fire.
-- Zombie Dismemberment: Finish off's decapitation on a server and on each player's game, and looting such a corpse in multiplayer.
-
-## Reporting problems
-
-Open an issue in the [issue tracker](../../issues) with:
-
-1. single player or server, and the game version;
-2. your Relentless Dead options (the `RelentlessDead` table of `SandboxVars.lua`);
-3. the Status report and the `[RelentlessDead]` lines from the log (`Zomboid/console.txt`, or the server's log), with **Verbose log** on if you can;
-4. your other mods, especially those that drive rising, raise or dismember zombies;
-5. what you expected and what happened.
-
-## Publishing
-
-Run the **Publish** workflow (Actions, Publish, Run workflow), optionally with notes for the top of the change log. It starts from the latest version: the highest `vX.Y.Z` release, or while there is none, the highest `vX.Y.Z` tag. Then:
-
-- **A release** when a commit since then is releasable (below) and something under `Contents/` changed. It is tagged `vX.Y.Z`, its notes are the change log (your notes, then the breaking changes, features and fixes from the commit messages), and `Contents/` and `preview.png` are uploaded to the Workshop item in `workshop.txt`'s `id=`, with the change log as the Steam change note.
-- **Only the Workshop page** is updated when the title, description or visibility in `workshop.txt`, or `preview.png`, changed.
-- **Nothing** otherwise.
-
-| Commit message | From 0.1.0 | From 1.4.2 |
-|---|---|---|
-| `fix: ...` | 0.1.1 | 1.4.3 |
-| `feat: ...` | 0.2.0 | 1.5.0 |
-| `feat!: ...` (any type with `!`), or a `BREAKING CHANGE:` footer | 0.2.0 | 2.0.0 |
-| any other type (`docs:`, `chore:`, ...) or message | no release | no release |
-
-A scope is fine (`fix(burning): ...`), and the highest of the commits counts. While MAJOR is 0, a breaking change raises MINOR, as a feature does. A `Release-As: X.Y.Z` footer sets the version instead; it must be higher than the latest. That is how 1.0.0 is made.
-
-**The first release:** while there is no `vX.Y.Z` release or tag, the version comes from a `Release-As: X.Y.Z` footer in a commit message, such as `Release-As: 0.1.0`; without one, Publish stops and says to add one.
-
-The version is set by Publish: `mod.info` has no `modversion=` line in the repository, and Publish writes it into the uploaded copy. When the upload fails, the release stays a pre-release, and the next run uploads it again before it publishes anything newer.
-
-Setup: the `steam` environment holds the secrets `STEAM_USERNAME` and `STEAM_CONFIG_VDF` (steamcmd's `config/config.vdf` after a login with Steam Guard). The item is created by uploading it once from the game, which writes its `id=` into `workshop.txt`.
+To work on Relentless Dead itself, see [CONTRIBUTING.md](CONTRIBUTING.md).
